@@ -9,10 +9,12 @@
 	},
 	"dependencies": {
 		"cheerio": "^1.0.0",
+		"m3u8-parser": "^7.2.0",
 		"stremio-addon-sdk": "1.1.x"
 	},
 	"packageManager": "pnpm@9.12.3+sha512.cce0f9de9c5a7c95bef944169cc5dfe8741abfb145078c0d508b868056848a87c81e626246cb60967cbd7fd29a6c062ef73ff840d96b3c86c40ac92cf4a813ee",
 	"devDependencies": {
+		"@types/m3u8-parser": "^7.2.3",
 		"@types/node": "^22.15.23",
 		"@types/stremio-addon-sdk": "^1.6.12",
 		"typescript": "^5.8.3"

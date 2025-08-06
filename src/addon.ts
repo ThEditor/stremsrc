@@ -36,11 +36,32 @@ builder.defineStreamHandler(
       let streams: Stream[] = [];
       for (const st of res) {
         if (st.stream == null) continue;
-        streams.push({
-          title: st.name ?? "Unknown",
-          url: st.stream,
-          behaviorHints: { notWebReady: true },
-        });
+        
+        // If we have HLS data with multiple qualities, create separate streams
+        if (st.hlsData && st.hlsData.qualities.length > 0) {
+          // Add the master playlist as "Auto Quality"
+          streams.push({
+            title: `${st.name ?? "Unknown"} - Auto Quality`,
+            url: st.stream,
+            behaviorHints: { notWebReady: true },
+          });
+          
+          // Add individual quality streams
+          for (const quality of st.hlsData.qualities) {
+            streams.push({
+              title: `${st.name ?? "Unknown"} - ${quality.title}`,
+              url: quality.url,
+              behaviorHints: { notWebReady: true },
+            });
+          }
+        } else {
+          // Fallback to original behavior if no HLS data
+          streams.push({
+            title: st.name ?? "Unknown",
+            url: st.stream,
+            behaviorHints: { notWebReady: true },
+          });
+        }
       }
       return { streams: streams };
     } catch (error) {

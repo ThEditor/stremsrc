@@ -5,9 +5,24 @@ modified and updated by github.com/theditor
 
 import { ContentType } from "stremio-addon-sdk";
 import * as cheerio from "cheerio";
+import { fetchAndParseHLS, ParsedHLSStream } from "./hls-utils";
 
 let BASEDOM = "https://cloudnestra.com";
 const SOURCE_URL = "https://vidsrc.xyz/embed";
+const BASE_HEADERS = {
+  "accept": "*/*",
+  "accept-language": "en-US,en;q=0.9",
+  "priority": "u=1",
+  "sec-ch-ua": "\"Chromium\";v=\"128\", \"Not;A=Brand\";v=\"24\", \"Google Chrome\";v=\"128\"",
+  "sec-ch-ua-mobile": "?0",
+  "sec-ch-ua-platform": "\"Windows\"",
+  "sec-fetch-dest": "script",
+  "sec-fetch-mode": "no-cors",
+  "sec-fetch-site": "same-origin",
+  'Sec-Fetch-Dest': 'iframe',
+  "Referer": `${BASEDOM}/`,
+  "Referrer-Policy": "origin",
+};
 
 interface Servers {
   name: string | null;
@@ -19,6 +34,7 @@ interface APIResponse {
   mediaId: string | null;
   stream: string | null;
   referer: string;
+  hlsData?: ParsedHLSStream | null;
 }
 interface RCPResponse {
   metadata: {
@@ -49,18 +65,7 @@ async function PRORCPhandler(prorcp: string): Promise<string | null> {
   try {
     const prorcpFetch = await fetch(`${BASEDOM}/prorcp/${prorcp}`, {
       headers: {
-        "accept": "*/*",
-        "accept-language": "en-US,en;q=0.9",
-        "priority": "u=1",
-        "sec-ch-ua": "\"Chromium\";v=\"128\", \"Not;A=Brand\";v=\"24\", \"Google Chrome\";v=\"128\"",
-        "sec-ch-ua-mobile": "?0",
-        "sec-ch-ua-platform": "\"Windows\"",
-        "sec-fetch-dest": "script",
-        "sec-fetch-mode": "no-cors",
-        "sec-fetch-site": "same-origin",
-        'Sec-Fetch-Dest': 'iframe',
-        "Referer": `${BASEDOM}/`,
-        "Referrer-Policy": "origin",
+        ...BASE_HEADERS,
       },
     });
     if (!prorcpFetch.ok) {
@@ -111,7 +116,11 @@ export function getUrl(id: string, type: ContentType) {
 
 async function getStreamContent(id: string, type: ContentType) {
   const url = getUrl(id, type);
-  const embed = await fetch(url);
+  const embed = await fetch(url, {
+    headers: {
+      ...BASE_HEADERS
+    }
+  });
   const embedResp = await embed.text();
 
   // get some metadata
@@ -120,7 +129,8 @@ async function getStreamContent(id: string, type: ContentType) {
   const rcpFetchPromises = servers.map(element => {
     return fetch(`${BASEDOM}/rcp/${element.dataHash}`, {
       headers: {
-        'Sec-Fetch-Dest': 'iframe'
+        ...BASE_HEADERS,
+        'Sec-Fetch-Dest': '',
       }
     });
   });
@@ -135,13 +145,20 @@ async function getStreamContent(id: string, type: ContentType) {
     if (!item) continue;
     switch (item.data.substring(0, 8)) {
       case "/prorcp/":
-        apiResponse.push({
-          name: title,
-          image: item.metadata.image,
-          mediaId: id,
-          stream: await PRORCPhandler(item.data.replace("/prorcp/", "")),
-          referer: BASEDOM,
-        });
+        const streamUrl = await PRORCPhandler(item.data.replace("/prorcp/", ""));
+        if (streamUrl) {
+          // Check if this is an HLS master playlist
+          const hlsData = await fetchAndParseHLS(streamUrl);
+          
+          apiResponse.push({
+            name: title,
+            image: item.metadata.image,
+            mediaId: id,
+            stream: streamUrl,
+            referer: BASEDOM,
+            hlsData: hlsData,
+          });
+        }
         break;
     }
   }

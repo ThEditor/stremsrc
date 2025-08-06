@@ -1,4 +1,8 @@
 "use strict";
+/*
+written by github.com/cool-dev-guy
+modified and updated by github.com/theditor
+*/
 var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
     if (k2 === undefined) k2 = k;
     var desc = Object.getOwnPropertyDescriptor(m, k);
@@ -45,8 +49,23 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.getUrl = getUrl;
 exports.getStreamContent = getStreamContent;
 const cheerio = __importStar(require("cheerio"));
+const hls_utils_1 = require("./hls-utils");
 let BASEDOM = "https://cloudnestra.com";
 const SOURCE_URL = "https://vidsrc.xyz/embed";
+const BASE_HEADERS = {
+    "accept": "*/*",
+    "accept-language": "en-US,en;q=0.9",
+    "priority": "u=1",
+    "sec-ch-ua": "\"Chromium\";v=\"128\", \"Not;A=Brand\";v=\"24\", \"Google Chrome\";v=\"128\"",
+    "sec-ch-ua-mobile": "?0",
+    "sec-ch-ua-platform": "\"Windows\"",
+    "sec-fetch-dest": "script",
+    "sec-fetch-mode": "no-cors",
+    "sec-fetch-site": "same-origin",
+    'Sec-Fetch-Dest': 'iframe',
+    "Referer": `${BASEDOM}/`,
+    "Referrer-Policy": "origin",
+};
 function serversLoad(html) {
     return __awaiter(this, void 0, void 0, function* () {
         var _a, _b, _c;
@@ -73,20 +92,7 @@ function PRORCPhandler(prorcp) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             const prorcpFetch = yield fetch(`${BASEDOM}/prorcp/${prorcp}`, {
-                headers: {
-                    "accept": "*/*",
-                    "accept-language": "en-US,en;q=0.9",
-                    "priority": "u=1",
-                    "sec-ch-ua": "\"Chromium\";v=\"128\", \"Not;A=Brand\";v=\"24\", \"Google Chrome\";v=\"128\"",
-                    "sec-ch-ua-mobile": "?0",
-                    "sec-ch-ua-platform": "\"Windows\"",
-                    "sec-fetch-dest": "script",
-                    "sec-fetch-mode": "no-cors",
-                    "sec-fetch-site": "same-origin",
-                    'Sec-Fetch-Dest': 'iframe',
-                    "Referer": `${BASEDOM}/`,
-                    "Referrer-Policy": "origin",
-                },
+                headers: Object.assign({}, BASE_HEADERS),
             });
             if (!prorcpFetch.ok) {
                 return null;
@@ -139,15 +145,15 @@ function getUrl(id, type) {
 function getStreamContent(id, type) {
     return __awaiter(this, void 0, void 0, function* () {
         const url = getUrl(id, type);
-        const embed = yield fetch(url);
+        const embed = yield fetch(url, {
+            headers: Object.assign({}, BASE_HEADERS)
+        });
         const embedResp = yield embed.text();
         // get some metadata
         const { servers, title } = yield serversLoad(embedResp);
         const rcpFetchPromises = servers.map(element => {
             return fetch(`${BASEDOM}/rcp/${element.dataHash}`, {
-                headers: {
-                    'Sec-Fetch-Dest': 'iframe'
-                }
+                headers: Object.assign(Object.assign({}, BASE_HEADERS), { 'Sec-Fetch-Dest': '' })
             });
         });
         const rcpResponses = yield Promise.all(rcpFetchPromises);
@@ -160,13 +166,19 @@ function getStreamContent(id, type) {
                 continue;
             switch (item.data.substring(0, 8)) {
                 case "/prorcp/":
-                    apiResponse.push({
-                        name: title,
-                        image: item.metadata.image,
-                        mediaId: id,
-                        stream: yield PRORCPhandler(item.data.replace("/prorcp/", "")),
-                        referer: BASEDOM,
-                    });
+                    const streamUrl = yield PRORCPhandler(item.data.replace("/prorcp/", ""));
+                    if (streamUrl) {
+                        // Check if this is an HLS master playlist
+                        const hlsData = yield (0, hls_utils_1.fetchAndParseHLS)(streamUrl);
+                        apiResponse.push({
+                            name: title,
+                            image: item.metadata.image,
+                            mediaId: id,
+                            stream: streamUrl,
+                            referer: BASEDOM,
+                            hlsData: hlsData,
+                        });
+                    }
                     break;
             }
         }
