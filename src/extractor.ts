@@ -9,20 +9,83 @@ import { fetchAndParseHLS, ParsedHLSStream } from "./hls-utils";
 
 let BASEDOM = "https://cloudnestra.com";
 const SOURCE_URL = "https://vidsrc.xyz/embed";
-const BASE_HEADERS = {
-  "accept": "*/*",
-  "accept-language": "en-US,en;q=0.9",
-  "priority": "u=1",
-  "sec-ch-ua": "\"Chromium\";v=\"128\", \"Not;A=Brand\";v=\"24\", \"Google Chrome\";v=\"128\"",
-  "sec-ch-ua-mobile": "?0",
-  "sec-ch-ua-platform": "\"Windows\"",
-  "sec-fetch-dest": "script",
-  "sec-fetch-mode": "no-cors",
-  "sec-fetch-site": "same-origin",
-  'Sec-Fetch-Dest': 'iframe',
-  "Referer": `${BASEDOM}/`,
-  "Referrer-Policy": "origin",
-};
+
+// Array of realistic user agents to rotate through
+const USER_AGENTS = [
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0",
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 Edg/128.0.0.0",
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
+];
+
+// Function to get sec-ch-ua based on user agent
+function getSecChUa(userAgent: string): string {
+  if (userAgent.includes('Chrome') && userAgent.includes('Edg')) {
+    // Edge
+    return '"Chromium";v="128", "Not;A=Brand";v="24", "Microsoft Edge";v="128"';
+  } else if (userAgent.includes('Chrome') && !userAgent.includes('Edg')) {
+    // Chrome
+    return '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"';
+  } else if (userAgent.includes('Firefox')) {
+    // Firefox doesn't send sec-ch-ua
+    return '';
+  } else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) {
+    // Safari doesn't send sec-ch-ua
+    return '';
+  }
+  // Default to Chrome
+  return '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"';
+}
+
+// Function to get sec-ch-ua-platform based on user agent
+function getSecChUaPlatform(userAgent: string): string {
+  if (userAgent.includes('Windows')) {
+    return '"Windows"';
+  } else if (userAgent.includes('Macintosh') || userAgent.includes('Mac OS X')) {
+    return '"macOS"';
+  } else if (userAgent.includes('Linux')) {
+    return '"Linux"';
+  }
+  return '"Windows"'; // Default
+}
+
+// Function to get a random user agent
+function getRandomUserAgent(): string {
+  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
+
+// Function to get headers with randomized user agent
+function getRandomizedHeaders() {
+  const userAgent = getRandomUserAgent();
+  const secChUa = getSecChUa(userAgent);
+  const secChUaPlatform = getSecChUaPlatform(userAgent);
+  
+  const headers: Record<string, string> = {
+    "accept": "*/*",
+    "accept-language": "en-US,en;q=0.9",
+    "priority": "u=1",
+    "sec-ch-ua-mobile": "?0",
+    "sec-fetch-dest": "script",
+    "sec-fetch-mode": "no-cors",
+    "sec-fetch-site": "same-origin",
+    'Sec-Fetch-Dest': 'iframe',
+    "Referer": `${BASEDOM}/`,
+    "Referrer-Policy": "origin",
+    "User-Agent": userAgent,
+  };
+
+  // Only add sec-ch-ua headers for Chromium-based browsers
+  if (secChUa) {
+    headers["sec-ch-ua"] = secChUa;
+    headers["sec-ch-ua-platform"] = secChUaPlatform;
+  }
+
+  return headers;
+}
 
 interface Servers {
   name: string | null;
@@ -65,7 +128,7 @@ async function PRORCPhandler(prorcp: string): Promise<string | null> {
   try {
     const prorcpFetch = await fetch(`${BASEDOM}/prorcp/${prorcp}`, {
       headers: {
-        ...BASE_HEADERS,
+        ...getRandomizedHeaders(),
       },
     });
     if (!prorcpFetch.ok) {
@@ -118,7 +181,7 @@ async function getStreamContent(id: string, type: ContentType) {
   const url = getUrl(id, type);
   const embed = await fetch(url, {
     headers: {
-      ...BASE_HEADERS
+      ...getRandomizedHeaders()
     }
   });
   const embedResp = await embed.text();
@@ -129,7 +192,7 @@ async function getStreamContent(id: string, type: ContentType) {
   const rcpFetchPromises = servers.map(element => {
     return fetch(`${BASEDOM}/rcp/${element.dataHash}`, {
       headers: {
-        ...BASE_HEADERS,
+        ...getRandomizedHeaders(),
         'Sec-Fetch-Dest': '',
       }
     });
