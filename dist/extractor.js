@@ -52,20 +52,80 @@ const cheerio = __importStar(require("cheerio"));
 const hls_utils_1 = require("./hls-utils");
 let BASEDOM = "https://cloudnestra.com";
 const SOURCE_URL = "https://vidsrc.xyz/embed";
-const BASE_HEADERS = {
-    "accept": "*/*",
-    "accept-language": "en-US,en;q=0.9",
-    "priority": "u=1",
-    "sec-ch-ua": "\"Chromium\";v=\"128\", \"Not;A=Brand\";v=\"24\", \"Google Chrome\";v=\"128\"",
-    "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": "\"Windows\"",
-    "sec-fetch-dest": "script",
-    "sec-fetch-mode": "no-cors",
-    "sec-fetch-site": "same-origin",
-    'Sec-Fetch-Dest': 'iframe',
-    "Referer": `${BASEDOM}/`,
-    "Referrer-Policy": "origin",
-};
+// Array of realistic user agents to rotate through
+const USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:129.0) Gecko/20100101 Firefox/129.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 Edg/128.0.0.0",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
+];
+// Function to get sec-ch-ua based on user agent
+function getSecChUa(userAgent) {
+    if (userAgent.includes('Chrome') && userAgent.includes('Edg')) {
+        // Edge
+        return '"Chromium";v="128", "Not;A=Brand";v="24", "Microsoft Edge";v="128"';
+    }
+    else if (userAgent.includes('Chrome') && !userAgent.includes('Edg')) {
+        // Chrome
+        return '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"';
+    }
+    else if (userAgent.includes('Firefox')) {
+        // Firefox doesn't send sec-ch-ua
+        return '';
+    }
+    else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) {
+        // Safari doesn't send sec-ch-ua
+        return '';
+    }
+    // Default to Chrome
+    return '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"';
+}
+// Function to get sec-ch-ua-platform based on user agent
+function getSecChUaPlatform(userAgent) {
+    if (userAgent.includes('Windows')) {
+        return '"Windows"';
+    }
+    else if (userAgent.includes('Macintosh') || userAgent.includes('Mac OS X')) {
+        return '"macOS"';
+    }
+    else if (userAgent.includes('Linux')) {
+        return '"Linux"';
+    }
+    return '"Windows"'; // Default
+}
+// Function to get a random user agent
+function getRandomUserAgent() {
+    return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+}
+// Function to get headers with randomized user agent
+function getRandomizedHeaders() {
+    const userAgent = getRandomUserAgent();
+    const secChUa = getSecChUa(userAgent);
+    const secChUaPlatform = getSecChUaPlatform(userAgent);
+    const headers = {
+        "accept": "*/*",
+        "accept-language": "en-US,en;q=0.9",
+        "priority": "u=1",
+        "sec-ch-ua-mobile": "?0",
+        "sec-fetch-dest": "script",
+        "sec-fetch-mode": "no-cors",
+        "sec-fetch-site": "same-origin",
+        'Sec-Fetch-Dest': 'iframe',
+        "Referer": `${BASEDOM}/`,
+        "Referrer-Policy": "origin",
+        "User-Agent": userAgent,
+    };
+    // Only add sec-ch-ua headers for Chromium-based browsers
+    if (secChUa) {
+        headers["sec-ch-ua"] = secChUa;
+        headers["sec-ch-ua-platform"] = secChUaPlatform;
+    }
+    return headers;
+}
 function serversLoad(html) {
     return __awaiter(this, void 0, void 0, function* () {
         var _a, _b, _c;
@@ -92,7 +152,7 @@ function PRORCPhandler(prorcp) {
     return __awaiter(this, void 0, void 0, function* () {
         try {
             const prorcpFetch = yield fetch(`${BASEDOM}/prorcp/${prorcp}`, {
-                headers: Object.assign({}, BASE_HEADERS),
+                headers: Object.assign({}, getRandomizedHeaders()),
             });
             if (!prorcpFetch.ok) {
                 return null;
@@ -146,14 +206,14 @@ function getStreamContent(id, type) {
     return __awaiter(this, void 0, void 0, function* () {
         const url = getUrl(id, type);
         const embed = yield fetch(url, {
-            headers: Object.assign({}, BASE_HEADERS)
+            headers: Object.assign({}, getRandomizedHeaders())
         });
         const embedResp = yield embed.text();
         // get some metadata
         const { servers, title } = yield serversLoad(embedResp);
         const rcpFetchPromises = servers.map(element => {
             return fetch(`${BASEDOM}/rcp/${element.dataHash}`, {
-                headers: Object.assign(Object.assign({}, BASE_HEADERS), { 'Sec-Fetch-Dest': '' })
+                headers: Object.assign(Object.assign({}, getRandomizedHeaders()), { 'Sec-Fetch-Dest': '' })
             });
         });
         const rcpResponses = yield Promise.all(rcpFetchPromises);
