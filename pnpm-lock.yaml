@@ -18,8 +18,8 @@ importers:
         specifier: ^7.2.0
         version: 7.2.0
       stremio-addon-sdk:
-        specifier: 1.1.x
-        version: 1.1.4
+        specifier: 1.6.10
+        version: 1.6.10
     devDependencies:
       '@types/m3u8-parser':
         specifier: ^7.2.3
@@ -609,8 +609,8 @@ packages:
   stremio-addon-linter@1.7.0:
     resolution: {integrity: sha512-ck1L1Wp2qvAhvXLj+4Lq1XRn8K3r2gx1i/f+e1W6K0+Et/oIYYDmaIVoh3SvExiNbCBcbJjH9WWEeDYKoqaMqQ==}
 
-  stremio-addon-sdk@1.1.4:
-    resolution: {integrity: sha512-RpLImIJANHVxIoLhtA2jI8wuEJCERis6uAUaPdnx603jBqxGC6N4vRsDUSz8CT/wJMf6ioJM1yX32vubUomhsw==}
+  stremio-addon-sdk@1.6.10:
+    resolution: {integrity: sha512-+U/lDGv73JPZa7OOy8eMb+SkUFhnHuZGBRXuKNeXcz706oDdwC/sQe9r8Wxw2A7Cw05+f/CQIJSl4zIcmKBkGg==}
     hasBin: true
 
   string-width@2.1.1:
@@ -1338,7 +1338,7 @@ snapshots:
     dependencies:
       semver: 5.7.2
 
-  stremio-addon-sdk@1.1.4:
+  stremio-addon-sdk@1.6.10:
     dependencies:
       chalk: 2.4.2
       cors: 2.8.5

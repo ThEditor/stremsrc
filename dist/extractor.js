@@ -50,8 +50,8 @@ exports.getUrl = getUrl;
 exports.getStreamContent = getStreamContent;
 const cheerio = __importStar(require("cheerio"));
 const hls_utils_1 = require("./hls-utils");
+const constants_1 = require("./constants");
 let BASEDOM = "https://cloudnestra.com";
-const SOURCE_URL = "https://vidsrc.xyz/embed";
 // Array of realistic user agents to rotate through
 const USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
@@ -61,38 +61,39 @@ const USER_AGENTS = [
     "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15",
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 Edg/128.0.0.0",
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
 ];
 // Function to get sec-ch-ua based on user agent
 function getSecChUa(userAgent) {
-    if (userAgent.includes('Chrome') && userAgent.includes('Edg')) {
+    if (userAgent.includes("Chrome") && userAgent.includes("Edg")) {
         // Edge
         return '"Chromium";v="128", "Not;A=Brand";v="24", "Microsoft Edge";v="128"';
     }
-    else if (userAgent.includes('Chrome') && !userAgent.includes('Edg')) {
+    else if (userAgent.includes("Chrome") && !userAgent.includes("Edg")) {
         // Chrome
         return '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"';
     }
-    else if (userAgent.includes('Firefox')) {
+    else if (userAgent.includes("Firefox")) {
         // Firefox doesn't send sec-ch-ua
-        return '';
+        return "";
     }
-    else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) {
+    else if (userAgent.includes("Safari") && !userAgent.includes("Chrome")) {
         // Safari doesn't send sec-ch-ua
-        return '';
+        return "";
     }
     // Default to Chrome
     return '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"';
 }
 // Function to get sec-ch-ua-platform based on user agent
 function getSecChUaPlatform(userAgent) {
-    if (userAgent.includes('Windows')) {
+    if (userAgent.includes("Windows")) {
         return '"Windows"';
     }
-    else if (userAgent.includes('Macintosh') || userAgent.includes('Mac OS X')) {
+    else if (userAgent.includes("Macintosh") ||
+        userAgent.includes("Mac OS X")) {
         return '"macOS"';
     }
-    else if (userAgent.includes('Linux')) {
+    else if (userAgent.includes("Linux")) {
         return '"Linux"';
     }
     return '"Windows"'; // Default
@@ -107,15 +108,15 @@ function getRandomizedHeaders() {
     const secChUa = getSecChUa(userAgent);
     const secChUaPlatform = getSecChUaPlatform(userAgent);
     const headers = {
-        "accept": "*/*",
+        accept: "*/*",
         "accept-language": "en-US,en;q=0.9",
-        "priority": "u=1",
+        priority: "u=1",
         "sec-ch-ua-mobile": "?0",
         "sec-fetch-dest": "script",
         "sec-fetch-mode": "no-cors",
         "sec-fetch-site": "same-origin",
-        'Sec-Fetch-Dest': 'iframe',
-        "Referer": `${BASEDOM}/`,
+        "Sec-Fetch-Dest": "iframe",
+        Referer: `${BASEDOM}/`,
         "Referrer-Policy": "origin",
         "User-Agent": userAgent,
     };
@@ -133,7 +134,8 @@ function serversLoad(html) {
         const servers = [];
         const title = (_a = $("title").text()) !== null && _a !== void 0 ? _a : "";
         const base = (_b = $("iframe").attr("src")) !== null && _b !== void 0 ? _b : "";
-        BASEDOM = (_c = new URL(base.startsWith("//") ? "https:" + base : base).origin) !== null && _c !== void 0 ? _c : BASEDOM;
+        BASEDOM =
+            (_c = new URL(base.startsWith("//") ? "https:" + base : base).origin) !== null && _c !== void 0 ? _c : BASEDOM;
         $(".serversList .server").each((index, element) => {
             var _a;
             const server = $(element);
@@ -185,35 +187,38 @@ function rcpGrabber(html) {
     });
 }
 function getObject(id) {
-    const arr = id.split(':');
+    const arr = id.split(":");
     return {
         id: arr[0],
         season: arr[1],
-        episode: arr[2]
+        episode: arr[2],
     };
 }
 function getUrl(id, type) {
+    if (id.startsWith("tmdb:"))
+        id = id.substring(5);
     if (type == "movie") {
-        return `${SOURCE_URL}/movie/${id}`;
+        return `${constants_1.SOURCE_URL}/movie/${id}`;
     }
     else {
         // fallback to series
         const obj = getObject(id);
-        return `${SOURCE_URL}/tv/${obj.id}/${obj.season}-${obj.episode}`;
+        return `${constants_1.SOURCE_URL}/tv/${obj.id}/${obj.season}-${obj.episode}`;
     }
 }
 function getStreamContent(id, type) {
     return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b, _c;
         const url = getUrl(id, type);
         const embed = yield fetch(url, {
-            headers: Object.assign({}, getRandomizedHeaders())
+            headers: Object.assign({}, getRandomizedHeaders()),
         });
         const embedResp = yield embed.text();
         // get some metadata
         const { servers, title } = yield serversLoad(embedResp);
-        const rcpFetchPromises = servers.map(element => {
+        const rcpFetchPromises = servers.map((element) => {
             return fetch(`${BASEDOM}/rcp/${element.dataHash}`, {
-                headers: Object.assign(Object.assign({}, getRandomizedHeaders()), { 'Sec-Fetch-Dest': '' })
+                headers: Object.assign(Object.assign({}, getRandomizedHeaders()), { "Sec-Fetch-Dest": "" }),
             });
         });
         const rcpResponses = yield Promise.all(rcpFetchPromises);
@@ -242,6 +247,66 @@ function getStreamContent(id, type) {
                     break;
             }
         }
-        return apiResponse;
+        const res = apiResponse;
+        if (!res)
+            return [];
+        let streams = [];
+        for (const st of res) {
+            if (st.stream == null)
+                continue;
+            // If we have HLS data with multiple qualities, create separate streams
+            if (st.hlsData && st.hlsData.qualities.length > 0) {
+                // Add the master playlist as "Auto Quality"
+                streams.push({
+                    title: `${(_a = st.name) !== null && _a !== void 0 ? _a : "Unknown"} - VidSRC/Cloudnestra Auto Quality`,
+                    url: st.stream,
+                    behaviorHints: {
+                        // @ts-ignore
+                        proxyHeaders: {
+                            request: {
+                                "Sec-Fetch-Dest": "iframe",
+                                Referer: `${BASEDOM}/`,
+                            },
+                        },
+                        notWebReady: true,
+                    },
+                });
+                // Add individual quality streams
+                for (const quality of st.hlsData.qualities) {
+                    streams.push({
+                        title: `${(_b = st.name) !== null && _b !== void 0 ? _b : "Unknown"} - VidSRC/Cloudnestra ${quality.title}`,
+                        url: quality.url,
+                        behaviorHints: {
+                            // @ts-ignore
+                            proxyHeaders: {
+                                request: {
+                                    "Sec-Fetch-Dest": "iframe",
+                                    Referer: `${BASEDOM}/`,
+                                },
+                            },
+                            notWebReady: true,
+                        },
+                    });
+                }
+            }
+            else {
+                // Fallback to original behavior if no HLS data
+                streams.push({
+                    title: `${(_c = st.name) !== null && _c !== void 0 ? _c : "Unknown"} - VidSRC/Cloudnestra`,
+                    url: st.stream,
+                    behaviorHints: {
+                        // @ts-ignore
+                        proxyHeaders: {
+                            request: {
+                                "Sec-Fetch-Dest": "iframe",
+                                Referer: `${BASEDOM}/`,
+                            },
+                        },
+                        notWebReady: true,
+                    },
+                });
+            }
+        }
+        return streams;
     });
 }

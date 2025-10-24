@@ -174,8 +174,7 @@ function getObject(id: string) {
 }
 
 export function getUrl(id: string, type: ContentType) {
-  if (id.startsWith('tmdb:'))
-    id = id.substring(5);
+  if (id.startsWith("tmdb:")) id = id.substring(5);
 
   if (type == "movie") {
     return `${SOURCE_URL}/movie/${id}`;
@@ -253,15 +252,35 @@ async function getStreamContent(id: string, type: ContentType) {
       streams.push({
         title: `${st.name ?? "Unknown"} - VidSRC/Cloudnestra Auto Quality`,
         url: st.stream,
-        behaviorHints: { notWebReady: true },
+        behaviorHints: {
+          // @ts-ignore
+          proxyHeaders: {
+            request: {
+              "Sec-Fetch-Dest": "iframe",
+              Referer: `${BASEDOM}/`,
+            },
+          },
+          notWebReady: true,
+        },
       });
 
       // Add individual quality streams
       for (const quality of st.hlsData.qualities) {
         streams.push({
-          title: `${st.name ?? "Unknown"} - VidSRC/Cloudnestra ${quality.title}`,
+          title: `${st.name ?? "Unknown"} - VidSRC/Cloudnestra ${
+            quality.title
+          }`,
           url: quality.url,
-          behaviorHints: { notWebReady: true },
+          behaviorHints: {
+            // @ts-ignore
+            proxyHeaders: {
+              request: {
+                "Sec-Fetch-Dest": "iframe",
+                Referer: `${BASEDOM}/`,
+              },
+            },
+            notWebReady: true,
+          },
         });
       }
     } else {
@@ -269,7 +288,16 @@ async function getStreamContent(id: string, type: ContentType) {
       streams.push({
         title: `${st.name ?? "Unknown"} - VidSRC/Cloudnestra`,
         url: st.stream,
-        behaviorHints: { notWebReady: true },
+        behaviorHints: {
+          // @ts-ignore
+          proxyHeaders: {
+            request: {
+              "Sec-Fetch-Dest": "iframe",
+              Referer: `${BASEDOM}/`,
+            },
+          },
+          notWebReady: true,
+        },
       });
     }
   }

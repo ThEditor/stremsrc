@@ -2,7 +2,7 @@ import {
   makeProviders,
   makeStandardFetcher,
   targets,
-  ScrapeMedia
+  ScrapeMedia,
 } from "@p-stream/providers";
 import { ContentType, Stream } from "stremio-addon-sdk";
 import { isTmdbMovie, MediaData } from "./types/catalog";
@@ -16,13 +16,17 @@ const p = makeProviders({
   target: targets.ANY,
 });
 
-async function getScrapeMedia(id: string, type: ContentType): Promise<ScrapeMedia | null> {
-  let args = id.split(':');
-  if (args[0] === "tmdb")
-    args = [`${args[0]}:${args[1]}`, args[2], args[3]];
-  
+async function getScrapeMedia(
+  id: string,
+  type: ContentType
+): Promise<ScrapeMedia | null> {
+  let args = id.split(":");
+  if (args[0] === "tmdb") args = [`${args[0]}:${args[1]}`, args[2], args[3]];
+
   const url = `${TMDB_META_URL}/${type}/${args[0]}.json`;
-  const r = await (await fetch(url)).json().catch(() => null) as MediaData | null;
+  const r = (await (await fetch(url))
+    .json()
+    .catch(() => null)) as MediaData | null;
 
   if (!r) return null;
 
@@ -30,12 +34,14 @@ async function getScrapeMedia(id: string, type: ContentType): Promise<ScrapeMedi
     return {
       type: "movie",
       title: r.meta.name,
-      releaseYear: (new Date(r.meta.released)).getUTCFullYear(),
-      tmdbId: r.meta.id.split(':')[1],
+      releaseYear: new Date(r.meta.released).getUTCFullYear(),
+      tmdbId: r.meta.id.split(":")[1],
       imdbId: r.meta.imdb_id,
-    }
+    };
 
-  const vid = r.meta.videos.find(v => v.id === `${r.meta.imdb_id}:${args[1]}:${args[2]}`);
+  const vid = r.meta.videos.find(
+    (v) => v.id === `${r.meta.imdb_id}:${args[1]}:${args[2]}`
+  );
   if (!vid) return null;
 
   return {
@@ -43,38 +49,50 @@ async function getScrapeMedia(id: string, type: ContentType): Promise<ScrapeMedi
     title: r.meta.name,
     episode: {
       number: vid.episode,
-      tmdbId: vid.id
+      tmdbId: vid.id,
     },
-    releaseYear: (new Date(r.meta.released)).getUTCFullYear(),
+    releaseYear: new Date(r.meta.released).getUTCFullYear(),
     season: {
       number: vid.season,
       title: vid.name,
       tmdbId: vid.id,
     },
-    tmdbId: r.meta.id.split(':')[1],
+    tmdbId: r.meta.id.split(":")[1],
     imdbId: r.meta.imdb_id,
-  }
+  };
 }
 
-async function getStreamContent(id: string, type: ContentType): Promise<Stream[]> {
+async function getStreamContent(
+  id: string,
+  type: ContentType
+): Promise<Stream[]> {
   const media = await getScrapeMedia(id, type);
   if (!media) return [];
-  
+
   const result = await p.runAll({
     media,
   });
-  
+
   if (!result) return [];
-  
+
   // Convert RunOutput to Stream format expected by Stremio
   const streams: Stream[] = [];
-  
-  if (result.stream.type === 'hls') {
+
+  if (result.stream.type === "hls") {
     // First add the master playlist as "Auto Quality"
     streams.push({
       title: `${media.title} - ${result.sourceId} (Auto Quality)`,
       url: result.stream.playlist,
-      behaviorHints: { notWebReady: true },
+      behaviorHints: {
+        // @ts-ignore
+        proxyHeaders: {
+          request: {
+            ...result.stream.headers,
+            ...result.stream.preferredHeaders,
+          },
+        },
+        notWebReady: true,
+      },
     });
 
     // Try to parse HLS master playlist for individual qualities
@@ -84,43 +102,72 @@ async function getStreamContent(id: string, type: ContentType): Promise<Stream[]
         streams.push({
           title: `${media.title} - ${result.sourceId} (${quality.title})`,
           url: quality.url,
-          behaviorHints: { notWebReady: true },
+          behaviorHints: {
+            // @ts-ignore
+            proxyHeaders: {
+              request: {
+                ...result.stream.headers,
+                ...result.stream.preferredHeaders,
+              },
+            },
+            notWebReady: true,
+          },
         });
       }
     }
-  } else if (result.stream.type === 'file') {
+  } else if (result.stream.type === "file") {
     // Add streams for each available quality
     const qualities = result.stream.qualities;
-    
+
     for (const q of Object.entries(qualities)) {
       const quality = q[1];
       if (quality?.url) {
-        const qualityLabel = q[0] === 'unknown' ? 'Unknown Quality' : `${q[0]}p`;
+        const qualityLabel =
+          q[0] === "unknown" ? "Unknown Quality" : `${q[0]}p`;
         streams.push({
           title: `${media.title} - ${result.sourceId} (${qualityLabel})`,
           url: quality.url,
-          behaviorHints: { notWebReady: true },
+          behaviorHints: {
+            // @ts-ignore
+            proxyHeaders: {
+              request: {
+                ...result.stream.headers,
+                ...result.stream.preferredHeaders,
+              },
+            },
+            notWebReady: true,
+          },
         });
       }
     }
   }
-  
+
   // If no specific qualities were found, return the original stream as fallback
   if (streams.length === 0) {
-    const fallbackUrl = result.stream.type === 'hls' 
-      ? result.stream.playlist 
-      : Object.values(result.stream.qualities || {})[0]?.url || '';
-    
+    const fallbackUrl =
+      result.stream.type === "hls"
+        ? result.stream.playlist
+        : Object.values(result.stream.qualities || {})[0]?.url || "";
+
     if (fallbackUrl) {
       streams.push({
         title: `${media.title} - ${result.sourceId}`,
         url: fallbackUrl,
-        behaviorHints: { notWebReady: true },
+        behaviorHints: {
+          // @ts-ignore
+          proxyHeaders: {
+            request: {
+              ...result.stream.headers,
+              ...result.stream.preferredHeaders,
+            },
+          },
+          notWebReady: true,
+        },
       });
     }
   }
-  
+
   return streams;
-};
+}
 
 export { getStreamContent };
