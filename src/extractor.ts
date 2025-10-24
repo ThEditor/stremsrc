@@ -3,12 +3,12 @@ written by github.com/cool-dev-guy
 modified and updated by github.com/theditor
 */
 
-import { ContentType } from "stremio-addon-sdk";
+import { ContentType, Stream } from "stremio-addon-sdk";
 import * as cheerio from "cheerio";
 import { fetchAndParseHLS, ParsedHLSStream } from "./hls-utils";
+import { SOURCE_URL } from "./constants";
 
 let BASEDOM = "https://cloudnestra.com";
-const SOURCE_URL = "https://vidsrc.xyz/embed";
 
 // Array of realistic user agents to rotate through
 const USER_AGENTS = [
@@ -19,23 +19,23 @@ const USER_AGENTS = [
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15",
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36 Edg/128.0.0.0",
   "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0"
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:128.0) Gecko/20100101 Firefox/128.0",
 ];
 
 // Function to get sec-ch-ua based on user agent
 function getSecChUa(userAgent: string): string {
-  if (userAgent.includes('Chrome') && userAgent.includes('Edg')) {
+  if (userAgent.includes("Chrome") && userAgent.includes("Edg")) {
     // Edge
     return '"Chromium";v="128", "Not;A=Brand";v="24", "Microsoft Edge";v="128"';
-  } else if (userAgent.includes('Chrome') && !userAgent.includes('Edg')) {
+  } else if (userAgent.includes("Chrome") && !userAgent.includes("Edg")) {
     // Chrome
     return '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"';
-  } else if (userAgent.includes('Firefox')) {
+  } else if (userAgent.includes("Firefox")) {
     // Firefox doesn't send sec-ch-ua
-    return '';
-  } else if (userAgent.includes('Safari') && !userAgent.includes('Chrome')) {
+    return "";
+  } else if (userAgent.includes("Safari") && !userAgent.includes("Chrome")) {
     // Safari doesn't send sec-ch-ua
-    return '';
+    return "";
   }
   // Default to Chrome
   return '"Chromium";v="128", "Not;A=Brand";v="24", "Google Chrome";v="128"';
@@ -43,11 +43,14 @@ function getSecChUa(userAgent: string): string {
 
 // Function to get sec-ch-ua-platform based on user agent
 function getSecChUaPlatform(userAgent: string): string {
-  if (userAgent.includes('Windows')) {
+  if (userAgent.includes("Windows")) {
     return '"Windows"';
-  } else if (userAgent.includes('Macintosh') || userAgent.includes('Mac OS X')) {
+  } else if (
+    userAgent.includes("Macintosh") ||
+    userAgent.includes("Mac OS X")
+  ) {
     return '"macOS"';
-  } else if (userAgent.includes('Linux')) {
+  } else if (userAgent.includes("Linux")) {
     return '"Linux"';
   }
   return '"Windows"'; // Default
@@ -63,17 +66,17 @@ function getRandomizedHeaders() {
   const userAgent = getRandomUserAgent();
   const secChUa = getSecChUa(userAgent);
   const secChUaPlatform = getSecChUaPlatform(userAgent);
-  
+
   const headers: Record<string, string> = {
-    "accept": "*/*",
+    accept: "*/*",
     "accept-language": "en-US,en;q=0.9",
-    "priority": "u=1",
+    priority: "u=1",
     "sec-ch-ua-mobile": "?0",
     "sec-fetch-dest": "script",
     "sec-fetch-mode": "no-cors",
     "sec-fetch-site": "same-origin",
-    'Sec-Fetch-Dest': 'iframe',
-    "Referer": `${BASEDOM}/`,
+    "Sec-Fetch-Dest": "iframe",
+    Referer: `${BASEDOM}/`,
     "Referrer-Policy": "origin",
     "User-Agent": userAgent,
   };
@@ -105,12 +108,15 @@ interface RCPResponse {
   };
   data: string;
 }
-async function serversLoad(html: string): Promise<{ servers: Servers[]; title: string }> {
+async function serversLoad(
+  html: string
+): Promise<{ servers: Servers[]; title: string }> {
   const $ = cheerio.load(html);
   const servers: Servers[] = [];
   const title = $("title").text() ?? "";
   const base = $("iframe").attr("src") ?? "";
-  BASEDOM = new URL(base.startsWith("//") ? "https:" + base : base).origin ?? BASEDOM;
+  BASEDOM =
+    new URL(base.startsWith("//") ? "https:" + base : base).origin ?? BASEDOM;
   $(".serversList .server").each((index, element) => {
     const server = $(element);
     servers.push({
@@ -159,15 +165,18 @@ async function rcpGrabber(html: string): Promise<RCPResponse | null> {
 }
 
 function getObject(id: string) {
-  const arr = id.split(':');
+  const arr = id.split(":");
   return {
     id: arr[0],
     season: arr[1],
-    episode: arr[2]
-  }
+    episode: arr[2],
+  };
 }
 
 export function getUrl(id: string, type: ContentType) {
+  if (id.startsWith('tmdb:'))
+    id = id.substring(5);
+
   if (type == "movie") {
     return `${SOURCE_URL}/movie/${id}`;
   } else {
@@ -181,38 +190,42 @@ async function getStreamContent(id: string, type: ContentType) {
   const url = getUrl(id, type);
   const embed = await fetch(url, {
     headers: {
-      ...getRandomizedHeaders()
-    }
+      ...getRandomizedHeaders(),
+    },
   });
   const embedResp = await embed.text();
 
   // get some metadata
   const { servers, title } = await serversLoad(embedResp);
 
-  const rcpFetchPromises = servers.map(element => {
+  const rcpFetchPromises = servers.map((element) => {
     return fetch(`${BASEDOM}/rcp/${element.dataHash}`, {
       headers: {
         ...getRandomizedHeaders(),
-        'Sec-Fetch-Dest': '',
-      }
+        "Sec-Fetch-Dest": "",
+      },
     });
   });
   const rcpResponses = await Promise.all(rcpFetchPromises);
 
-  const prosrcrcp = await Promise.all(rcpResponses.map(async (response, i) => {
-    return rcpGrabber(await response.text());
-  }));
+  const prosrcrcp = await Promise.all(
+    rcpResponses.map(async (response, i) => {
+      return rcpGrabber(await response.text());
+    })
+  );
 
   const apiResponse: APIResponse[] = [];
   for (const item of prosrcrcp) {
     if (!item) continue;
     switch (item.data.substring(0, 8)) {
       case "/prorcp/":
-        const streamUrl = await PRORCPhandler(item.data.replace("/prorcp/", ""));
+        const streamUrl = await PRORCPhandler(
+          item.data.replace("/prorcp/", "")
+        );
         if (streamUrl) {
           // Check if this is an HLS master playlist
           const hlsData = await fetchAndParseHLS(streamUrl);
-          
+
           apiResponse.push({
             name: title,
             image: item.metadata.image,
@@ -225,6 +238,42 @@ async function getStreamContent(id: string, type: ContentType) {
         break;
     }
   }
-  return apiResponse;
+
+  const res = apiResponse;
+
+  if (!res) return [];
+
+  let streams: Stream[] = [];
+  for (const st of res) {
+    if (st.stream == null) continue;
+
+    // If we have HLS data with multiple qualities, create separate streams
+    if (st.hlsData && st.hlsData.qualities.length > 0) {
+      // Add the master playlist as "Auto Quality"
+      streams.push({
+        title: `${st.name ?? "Unknown"} - VidSRC/Cloudnestra Auto Quality`,
+        url: st.stream,
+        behaviorHints: { notWebReady: true },
+      });
+
+      // Add individual quality streams
+      for (const quality of st.hlsData.qualities) {
+        streams.push({
+          title: `${st.name ?? "Unknown"} - VidSRC/Cloudnestra ${quality.title}`,
+          url: quality.url,
+          behaviorHints: { notWebReady: true },
+        });
+      }
+    } else {
+      // Fallback to original behavior if no HLS data
+      streams.push({
+        title: `${st.name ?? "Unknown"} - VidSRC/Cloudnestra`,
+        url: st.stream,
+        behaviorHints: { notWebReady: true },
+      });
+    }
+  }
+
+  return streams;
 }
 export { getStreamContent };

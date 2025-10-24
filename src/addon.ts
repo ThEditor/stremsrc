@@ -1,9 +1,10 @@
-import { addonBuilder, Manifest, Stream } from "stremio-addon-sdk";
-import { getStreamContent } from "./extractor";
+import { addonBuilder, ContentType, Manifest, Stream } from "stremio-addon-sdk";
+import { getStreamContent as getVidsrcStreams } from "./extractor";
+import { getStreamContent as getPStreamStreams } from "./pstream";
 
 const manifest: Manifest = {
   id: "xyz.theditor.stremsrc",
-  version: "0.1.0",
+  version: "0.2.0",
   catalogs: [],
   resources: [
     {
@@ -14,61 +15,48 @@ const manifest: Manifest = {
   ],
   types: ["movie", "series"],
   name: "stremsrc",
-  description: "A VidSRC extractor for stremio",
+  description: "A VidSRC + PStream extractor for stremio",
 };
 
 const builder = new addonBuilder(manifest);
 
-builder.defineStreamHandler(
-  async ({
-    id,
-    type,
-  }): Promise<{
-    streams: Stream[];
-  }> => {
-    try {
-      const res = await getStreamContent(id, type);
-      
-      if (!res) {
-        return { streams: [] };
-      }
+export const addonFn = async ({
+  type,
+  id
+}: {
+  type: ContentType;
+  id: string;
+}): Promise<{
+  streams: Stream[];
+}> => {
+  try {
+    // Get streams from both extractors concurrently
+    const [vidsrcStreams, pStreamStreams] = await Promise.allSettled([
+      getVidsrcStreams(id, type),
+      getPStreamStreams(id, type),
+    ]);
 
-      let streams: Stream[] = [];
-      for (const st of res) {
-        if (st.stream == null) continue;
-        
-        // If we have HLS data with multiple qualities, create separate streams
-        if (st.hlsData && st.hlsData.qualities.length > 0) {
-          // Add the master playlist as "Auto Quality"
-          streams.push({
-            title: `${st.name ?? "Unknown"} - Auto Quality`,
-            url: st.stream,
-            behaviorHints: { notWebReady: true },
-          });
-          
-          // Add individual quality streams
-          for (const quality of st.hlsData.qualities) {
-            streams.push({
-              title: `${st.name ?? "Unknown"} - ${quality.title}`,
-              url: quality.url,
-              behaviorHints: { notWebReady: true },
-            });
-          }
-        } else {
-          // Fallback to original behavior if no HLS data
-          streams.push({
-            title: st.name ?? "Unknown",
-            url: st.stream,
-            behaviorHints: { notWebReady: true },
-          });
-        }
-      }
-      return { streams: streams };
-    } catch (error) {
-      console.error('Stream extraction failed:', error);
-      return { streams: [] };
+    const allStreams: Stream[] = [];
+
+    // Add VidSrc streams if successful
+    if (vidsrcStreams.status === "fulfilled" && vidsrcStreams.value) {
+      allStreams.push(...vidsrcStreams.value);
     }
+
+    // Add P-Stream streams if successful
+    if (pStreamStreams.status === "fulfilled" && pStreamStreams.value) {
+      allStreams.push(...pStreamStreams.value);
+    }
+
+    return {
+      streams: allStreams,
+    };
+  } catch (error) {
+    console.error("Stream extraction failed:", error);
+    return { streams: [] };
   }
-);
+};
+
+builder.defineStreamHandler(addonFn);
 
 export default builder.getInterface();

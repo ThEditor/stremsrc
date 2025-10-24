@@ -1,6 +1,6 @@
 {
 	"name": "stremio-addon-stremsrc",
-	"version": "0.1.0",
+	"version": "0.2.0",
 	"description": "A VidSRC extractor for stremio",
 	"main": "./dist/index.js",
 	"scripts": {
@@ -8,6 +8,7 @@
 		"build": "tsc"
 	},
 	"dependencies": {
+		"@p-stream/providers": "github:p-stream/providers#production",
 		"cheerio": "^1.0.0",
 		"m3u8-parser": "^7.2.0",
 		"stremio-addon-sdk": "1.1.x"
